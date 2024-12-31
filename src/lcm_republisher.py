@@ -7,7 +7,7 @@ import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import pyrealsense2 as rs
-import bot_core  # Assuming you have the LCM message types from your project
+import bot_core  # import LCM message types
 
 class RealSensePublisher:
     def __init__(self):

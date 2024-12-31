@@ -4,6 +4,7 @@ import cv2
 import zlib
 import jpeg
 import time
+import bot_core
 
 class ImagePublisher:
     def __init__(self, lcm_channel, compress_rgb=False, compress_depth=False, jpeg_quality=90, debug=False):
