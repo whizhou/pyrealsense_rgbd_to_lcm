@@ -1,0 +1,6 @@
+numpy
+pyrealsense2
+opencv-python
+lcm
+pyyaml
+rospkg
