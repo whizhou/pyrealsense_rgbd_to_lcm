@@ -7,6 +7,7 @@ import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import pyrealsense2 as rs
+import message_filters
 import bot_core  # import LCM message types
 
 class RealSensePublisher:
@@ -44,17 +45,21 @@ class RealSensePublisher:
         self.pipeline.start(config)
 
         # Set up ROS subscribers for RGB and depth topics
-        self.rgb_topic = rospy.get_param('~rgb_topic', '/camera/rgb/image_rect_color')
-        self.depth_topic = rospy.get_param('~depth_topic', '/camera/depth_registered/sw_registered/image_rect_raw')
+        self.rgb_topic = rospy.get_param('~rgb_topic', '/camera/color/image_raw')
+        self.depth_topic = rospy.get_param('~depth_topic', '/camera/aligned_depth_to_color/image_raw')
         # rospy.Subscriber(self.rgb_topic, Image, self.rgb_callback)
         # rospy.Subscriber(self.depth_topic, Image, self.depth_callback)
+
+        rospy.loginfo(f"RGB Topic: {self.rgb_topic}")
+        rospy.loginfo(f"Depth Topic: {self.depth_topic}")
+        # print(self.rgb_topic, self.depth_topic)
         
-        # Subscribe to both topics with a synchronized callback
-        self.sync_subscriber = rospy.Subscriber(
-            [self.rgb_topic, self.depth_topic], 
-            [Image, Image],
-            self.sync_callback
-        )
+        # 使用message_filters同步RGB和深度图像
+        rgb_sub = message_filters.Subscriber(self.rgb_topic, Image)
+        depth_sub = message_filters.Subscriber(self.depth_topic, Image)
+
+        ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 10)
+        ts.registerCallback(self.sync_callback)
 
     def sync_callback(self, rgb_msg, depth_msg):
         """

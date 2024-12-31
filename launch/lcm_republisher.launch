@@ -6,8 +6,8 @@
     <rosparam subst_value="true">      
       # input parameters
       subscribe_point_cloud: false
-      rgb_topic: /camera/rgb/image_rect_color
-      depth_topic: /camera/depth_registered/sw_registered/image_rect_raw
+      rgb_topic: /camera/color/image_raw
+      depth_topic: /camera/aligned_depth_to_color/image_raw
       cloud_topic: /camera/depth_registered/points
 
       # output parameters
