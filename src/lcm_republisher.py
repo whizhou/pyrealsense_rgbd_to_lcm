@@ -46,26 +46,51 @@ class RealSensePublisher:
         # Set up ROS subscribers for RGB and depth topics
         self.rgb_topic = rospy.get_param('~rgb_topic', '/camera/rgb/image_rect_color')
         self.depth_topic = rospy.get_param('~depth_topic', '/camera/depth_registered/sw_registered/image_rect_raw')
-        rospy.Subscriber(self.rgb_topic, Image, self.rgb_callback)
-        rospy.Subscriber(self.depth_topic, Image, self.depth_callback)
+        # rospy.Subscriber(self.rgb_topic, Image, self.rgb_callback)
+        # rospy.Subscriber(self.depth_topic, Image, self.depth_callback)
+        
+        # Subscribe to both topics with a synchronized callback
+        self.sync_subscriber = rospy.Subscriber(
+            [self.rgb_topic, self.depth_topic], 
+            [Image, Image],
+            self.sync_callback
+        )
 
-    def rgb_callback(self, msg):
+    def sync_callback(self, rgb_msg, depth_msg):
+        """
+        Synchronized RGB and depth image callback method.
+        """
         try:
-            # Convert the ROS Image message to OpenCV format
-            rgb_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            # Convert the ROS Image messages to OpenCV format
+            rgb = self.bridge.imgmsg_to_cv2(rgb_msg, "bgr8")
+            depth = self.bridge.imgmsg_to_cv2(depth_msg, "16UC1")  # 16-bit depth image
+            
             timestamp = int(time.time() * 1000000)  # Current time in microseconds
-            self.publish_lcm(timestamp, rgb_image, None)
-        except Exception as e:
-            rospy.logerr(f"Error in RGB callback: {e}")
 
-    def depth_callback(self, msg):
-        try:
-            # Convert the ROS Image message to OpenCV format (depth)
-            depth_image = self.bridge.imgmsg_to_cv2(msg, "16UC1")  # 16-bit depth image
-            timestamp = int(time.time() * 1000000)  # Current time in microseconds
-            self.publish_lcm(timestamp, None, depth_image)
+            if self.debug:
+                rospy.loginfo(f"RGB and Depth images acquired at {timestamp}")
+            
+            # Check RGB encoding (BGR8 assumed)
+            if rgb_msg.encoding == 'bgr8':
+                pass  # BGR8 encoding, no conversion needed
+            else:
+                rospy.logerr(f"Unexpected RGB encoding: {rgb_msg.encoding}")
+                return
+
+            # Check Depth encoding (16UC1 or 32FC1)
+            if depth_msg.encoding == '16UC1':
+                pass  # 16-bit depth, no conversion needed
+            elif depth_msg.encoding == '32FC1':
+                depth = (depth * 1000).astype(np.uint16)  # Convert 32FC1 to 16UC1 if needed
+            else:
+                rospy.logerr(f"Unexpected Depth encoding: {depth_msg.encoding}")
+                return
+
+            # Publish the synchronized data
+            self.publish_lcm(timestamp, rgb, depth)
+            
         except Exception as e:
-            rospy.logerr(f"Error in Depth callback: {e}")
+            rospy.logerr(f"Error in synchronized callback: {e}")
 
     def publish_lcm(self, timestamp, rgb, depth):
         # Create RGB LCM message
@@ -81,13 +106,13 @@ class RealSensePublisher:
             if not self.compress_rgb:
                 self.rgb_lcm_msg.pixelformat = 861030210  # PIXEL_FORMAT_BGR
             else:
-                # Compress RGB using JPEG
-                compressed_size = len(self.image_buf)
-                compression_status = jpeg.compress_8u_rgb(rgb, self.jpeg_quality, self.image_buf, compressed_size)
-                if compression_status != 0:
-                    print("JPEG compression failed...")
-                self.rgb_lcm_msg.data = list(self.image_buf[:compressed_size])
-                self.rgb_lcm_msg.size = compressed_size
+               # Compress RGB using OpenCV JPEG
+                ret, encoded_image = cv2.imencode('.jpg', rgb, [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality])
+                if not ret:
+                    rospy.logerr("JPEG compression failed")
+                    return
+                self.rgb_lcm_msg.data = list(encoded_image.flatten())  # Flatten the encoded image
+                self.rgb_lcm_msg.size = len(encoded_image)  # Set the compressed size
                 self.rgb_lcm_msg.pixelformat = bot_core.image_t.PIXEL_FORMAT_MJPEG
 
         # Create Depth LCM message
@@ -104,11 +129,14 @@ class RealSensePublisher:
                 self.depth_lcm_msg.pixelformat = 357  # PIXEL_FORMAT_BE_GRAY16
             else:
                 # Compress Depth using zlib
-                uncompressed_size = depth.shape[0] * depth.shape[1] * 2
-                compressed_size = len(self.depth_compress_buf)
-                zlib.compress(depth.tobytes(), level=9, out=self.depth_compress_buf)
-                self.depth_lcm_msg.data = list(self.depth_compress_buf[:compressed_size])
-                self.depth_lcm_msg.size = compressed_size
+                # uncompressed_size = depth.shape[0] * depth.shape[1] * 2
+                # compressed_size = len(self.depth_compress_buf)
+                # zlib.compress(depth.tobytes(), level=9, out=self.depth_compress_buf)
+                # self.depth_lcm_msg.data = list(self.depth_compress_buf[:compressed_size])
+                # self.depth_lcm_msg.size = compressed_size
+                compressed_depth = zlib.compress(depth.tobytes(), level=9)
+                self.depth_lcm_msg.data = list(compressed_depth)
+                self.depth_lcm_msg.size = len(compressed_depth)
                 self.depth_lcm_msg.pixelformat = -2  # PIXEL_FORMAT_DEPTH_MM_ZIPPED
 
         # Create Image message and publish
@@ -122,7 +150,7 @@ class RealSensePublisher:
 
         self.i += 1
         if self.debug:
-            print(f"Frame {self.i} published")
+            rospy.loginfo(f"Frame {self.i} published")
 
     def stop(self):
         # Stop the pipeline when we're done
