@@ -3,21 +3,11 @@ import numpy as np
 import time
 import lcm
 import zlib
-# import rospy
-# from sensor_msgs.msg import Image
-# from cv_bridge import CvBridge
 import pyrealsense2 as rs
-# import message_filters
 import bot_core  # import LCM message types
 
 class RealSensePublisher:
     def __init__(self):
-        # Initialize ROS parameters
-        # self.lcm_channel = rospy.get_param('~output_lcm_channel', 'OPENNI_FRAME')  # LCM channel
-        # self.compress_rgb = rospy.get_param('~compress_rgb', True)  # RGB compression flag
-        # self.compress_depth = rospy.get_param('~compress_depth', True)  # Depth compression flag
-        # self.jpeg_quality = rospy.get_param('~jpeg_quality', 85)  # JPEG quality
-        # self.debug = rospy.get_param('~debug_print_statements', True)  # Debug flag
         self.lcm_channel = 'OPENNI_FRAME'  # LCM channel
         self.compress_rgb = True  # RGB compression flag
         self.compress_depth = True  # Depth compression flag
@@ -31,12 +21,6 @@ class RealSensePublisher:
         self.rgb_lcm_msg = bot_core.image_t()
         self.depth_lcm_msg = bot_core.image_t()
         self.i = 0
-        # self.image_buf = bytearray(1024 * 1024)  # Buffer for compressed images
-        # self.depth_compress_buf = bytearray(1024 * 1024)  # Buffer for depth compression
-
-        # Initialize ROS node and CvBridge
-        # rospy.init_node("realsense_lcm_publisher")
-        # self.bridge = CvBridge()
 
         # Set up RealSense pipeline for RGBD stream
         self.pipeline = rs.pipeline()
@@ -49,61 +33,6 @@ class RealSensePublisher:
         # Start the pipeline
         self.pipeline.start(config)
 
-        # Set up ROS subscribers for RGB and depth topics
-        # self.rgb_topic = rospy.get_param('~rgb_topic', '/camera/color/image_raw')
-        # self.depth_topic = rospy.get_param('~depth_topic', '/camera/aligned_depth_to_color/image_raw')
-        # rospy.Subscriber(self.rgb_topic, Image, self.rgb_callback)
-        # rospy.Subscriber(self.depth_topic, Image, self.depth_callback)
-
-        # rospy.loginfo(f"RGB Topic: {self.rgb_topic}")
-        # rospy.loginfo(f"Depth Topic: {self.depth_topic}")
-        # print(self.rgb_topic, self.depth_topic)
-        
-        # 使用message_filters同步RGB和深度图像
-        # rgb_sub = message_filters.Subscriber(self.rgb_topic, Image)
-        # depth_sub = message_filters.Subscriber(self.depth_topic, Image)
-
-        # ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 10)
-        # ts.registerCallback(self.sync_callback)
-    
-    '''
-    def sync_callback(self, rgb_msg, depth_msg):
-        """
-        Synchronized RGB and depth image callback method.
-        """
-        try:
-            # Convert the ROS Image messages to OpenCV format
-            rgb = self.bridge.imgmsg_to_cv2(rgb_msg, "bgr8")
-            depth = self.bridge.imgmsg_to_cv2(depth_msg, "16UC1")  # 16-bit depth image
-            
-            timestamp = int(time.time() * 1000000)  # Current time in microseconds
-
-            if self.debug:
-                rospy.loginfo(f"RGB and Depth images acquired at {timestamp}")
-            
-            # Check RGB encoding (BGR8 assumed)
-            if rgb_msg.encoding == 'bgr8':
-                pass  # BGR8 encoding, no conversion needed
-            else:
-                rospy.logerr(f"Unexpected RGB encoding: {rgb_msg.encoding}")
-                return
-
-            # Check Depth encoding (16UC1 or 32FC1)
-            if depth_msg.encoding == '16UC1':
-                pass  # 16-bit depth, no conversion needed
-            elif depth_msg.encoding == '32FC1':
-                depth = (depth * 1000).astype(np.uint16)  # Convert 32FC1 to 16UC1 if needed
-            else:
-                rospy.logerr(f"Unexpected Depth encoding: {depth_msg.encoding}")
-                return
-
-            # Publish the synchronized data
-            self.publish_lcm(timestamp, rgb, depth)
-            
-        except Exception as e:
-            rospy.logerr(f"Error in synchronized callback: {e}")
-    '''
-
     def collect_data(self):
         while True:
             frames = self.pipeline.wait_for_frames()
@@ -112,12 +41,8 @@ class RealSensePublisher:
             depth_frame = frames.get_depth_frame()
             color_frame = frames.get_color_frame()
 
-            #
-            # depth_image = self.bridge.imgmsg_to_cv2(depth_frame, desired_encoding="16UC1")
-            # rgb_image = self.bridge.imgmsg_to_cv2(color_frame, desired_encoding="bgr8")
             # Convert color_frame to numpy array (RGB format)
             rgb_image = np.asanyarray(color_frame.get_data())
-
             # Convert depth_frame to numpy array (Depth format)
             depth_image = np.asanyarray(depth_frame.get_data())
 
@@ -168,12 +93,6 @@ class RealSensePublisher:
                 self.depth_lcm_msg.data = list(depth.flatten())  # Flatten to 1D list
                 self.depth_lcm_msg.pixelformat = 357  # PIXEL_FORMAT_BE_GRAY16
             else:
-                # Compress Depth using zlib
-                # uncompressed_size = depth.shape[0] * depth.shape[1] * 2
-                # compressed_size = len(self.depth_compress_buf)
-                # zlib.compress(depth.tobytes(), level=9, out=self.depth_compress_buf)
-                # self.depth_lcm_msg.data = list(self.depth_compress_buf[:compressed_size])
-                # self.depth_lcm_msg.size = compressed_size
                 compressed_depth = zlib.compress(depth.tobytes(), level=9)
                 self.depth_lcm_msg.data = list(compressed_depth)
                 self.depth_lcm_msg.size = len(compressed_depth)
@@ -206,14 +125,11 @@ if __name__ == "__main__":
     try:
         # Initialize the RealSensePublisher
         publisher = RealSensePublisher()
-        
-        # Spin ROS to keep listening for messages
-        # rospy.spin()
 
+        # Collect RGB and Depth data
         publisher.collect_data()
 
     except Exception as e:
         print(f"Error in RealSensePublisher: {e}")
-        # rospy.logerr(f"Error in RealSensePublisher: {e}")
     finally:
         publisher.stop()

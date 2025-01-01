@@ -2,8 +2,3 @@ numpy
 pyrealsense2
 opencv-python
 lcm
-pyyaml
-rospkg
-sphinx
-myst-parser
-sphinx-rtd-theme
