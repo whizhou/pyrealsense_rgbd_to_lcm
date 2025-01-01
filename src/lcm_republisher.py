@@ -5,7 +5,7 @@ import lcm
 import zlib
 # import rospy
 # from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
+# from cv_bridge import CvBridge
 import pyrealsense2 as rs
 # import message_filters
 import bot_core  # import LCM message types
@@ -113,8 +113,13 @@ class RealSensePublisher:
             color_frame = frames.get_color_frame()
 
             #
-            depth_image = self.bridge.imgmsg_to_cv2(depth_frame, desired_encoding="16UC1")
-            rgb_image = self.bridge.imgmsg_to_cv2(color_frame, desired_encoding="bgr8")
+            # depth_image = self.bridge.imgmsg_to_cv2(depth_frame, desired_encoding="16UC1")
+            # rgb_image = self.bridge.imgmsg_to_cv2(color_frame, desired_encoding="bgr8")
+            # Convert color_frame to numpy array (RGB format)
+            rgb_image = np.asanyarray(color_frame.get_data())
+
+            # Convert depth_frame to numpy array (Depth format)
+            depth_image = np.asanyarray(depth_frame.get_data())
 
             publish_time = int(time.time() * 1000000)  # Current time in microseconds
 
@@ -181,7 +186,12 @@ class RealSensePublisher:
         images_msg.images = [self.rgb_lcm_msg, self.depth_lcm_msg]
         images_msg.image_types = [0, 4] if not self.compress_depth else [0, 6]  # 4: DEPTH_MM, 6: DEPTH_MM_ZIPPED
 
-        self.lcm.publish(self.lcm_channel, images_msg)
+        # Encode the images_t message to bytes before publishing
+        try:
+            encoded_msg = images_msg.encode()  # This serializes the message to a byte string
+            self.lcm.publish(self.lcm_channel, encoded_msg)  # Publish the encoded message
+        except Exception as e:
+            print(f"Error encoding and publishing message: {e}")
 
         self.i += 1
         if self.debug:
