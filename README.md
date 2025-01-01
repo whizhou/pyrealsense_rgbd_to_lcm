@@ -60,7 +60,7 @@ Note: this package has a hard runtime dependency on GLib 2.0. If you have not al
 pip install numpy opencv-python
 ```
 
-## 获取 lcmlog 日志文件
+## 收集原始数据
 
 1. 运行 `scripts/lcm_republisher.py`，启动相机发布 lcm 消息
 
@@ -102,4 +102,4 @@ pip install numpy opencv-python
                 original_log.lcmlog
     ```
 
-    缺少子文件夹可能导致 `run_alignment_tool` 时找不到所需文件。
+    缺少子文件夹可能导致运行命令 `run_alignment_tool` 时找不到所需文件。
